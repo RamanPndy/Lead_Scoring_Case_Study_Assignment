@@ -170,4 +170,4 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
-dags/Lead_scoring_data_pipeline/db/lead_scoring_data_cleaning.db
+*.DS_STORE
