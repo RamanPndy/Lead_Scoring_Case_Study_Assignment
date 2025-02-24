@@ -1,0 +1,8 @@
+channels:
+- conda-forge
+dependencies:
+- pip<=25.0.1
+- pip:
+  - mlflow==2.7.1
+  - pycaret==3.3.2
+name: Lead_scoring_model_experiment_02-env
