@@ -1,7 +1,7 @@
 '''
 filename: utils.py
 functions: encode_features, load_model
-creator: shashank.gupta
+creator: raman.pndy
 version: 1
 '''
 
@@ -13,24 +13,13 @@ import mlflow
 import mlflow.sklearn
 import pandas as pd
 
-import sqlite3
-
-import os
-
 from datetime import datetime
 from constants import *
+from helper_funcs import connect_to_db
 
 ###############################################################################
 # Define the function to train the model
 # ##############################################################################
-def connect_to_db():
-    try:
-        db_full_path = os.path.join(DB_PATH, DB_FILE_NAME)
-        conn = sqlite3.connect(db_full_path)
-        print("connecting to db from path: ", db_full_path)
-        return conn
-    except Exception as e:
-        print(e)
 
 def encode_features():
     '''
@@ -73,7 +62,9 @@ def encode_features():
                 
         df_encoded=df_encoded.fillna(0)
         df_encoded.to_sql('features_inference',con=conn,index=False,if_exists='replace')
-    conn.close()
+        conn.close()
+    else:
+        print("Unable to get DB connection")
 
 ###############################################################################
 # Define the function to load the model from mlflow model registry
@@ -107,20 +98,21 @@ def get_models_prediction():
         
         # Load input data from SQLite database
         conn = connect_to_db()
-        query = "SELECT * FROM input_data"  # Assumes input data is stored in 'input_data' table
-        df = pd.read_sql(query, conn)
-        print("Loaded input data from database.")
-        
-        # Make predictions
-        df["predictions"] = model.predict(df)
-        
-        # Store predictions in the database
-        df.to_sql("predictions", conn, if_exists="replace", index=False)
-        print("Predictions stored successfully in database.")
-        
-        # Close database connection
-        conn.close()
-        print("Database connection closed.")
+        if conn:
+            query = "SELECT * FROM input_data"  # Assumes input data is stored in 'input_data' table
+            df = pd.read_sql(query, conn)
+            print("Loaded input data from database.")
+            
+            # Make predictions
+            df["predictions"] = model.predict(df)
+            
+            # Store predictions in the database
+            df.to_sql("predictions", conn, if_exists="replace", index=False)
+            print("Predictions stored successfully in database.")
+            
+            conn.close()
+        else:
+            print("Unable to get DB connection")
     except Exception as e:
         print(f"Error occurred: {str(e)}")
 
@@ -158,6 +150,8 @@ def prediction_ratio_check():
         text = str(ct) +" % of 1="+str(per_value[0])+ " % of 0 =" + str(per_value[1])
         with open("prediction_distribution.txt",'a') as f:
             f.write(text +"\n")
+    else:
+        print("Unable to get DB connection")
 ###############################################################################
 # Define the function to check the columns of input features
 # ##############################################################################
@@ -191,3 +185,5 @@ def input_features_check():
             print("All the models input are present")
         else:
             print("Some of the models inputs are missing")
+    else:
+        print("Unable to get DB connection")

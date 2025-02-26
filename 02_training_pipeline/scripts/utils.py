@@ -12,7 +12,6 @@ version: 1
 import pandas as pd
 import numpy as np
 
-import sqlite3
 from sqlite3 import Error
 
 import mlflow
@@ -22,16 +21,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score, accuracy_score
 import lightgbm as lgb
 
-import os
 import logging
 
 from constants import *
-
-def connect_to_db():
-    db_full_path = os.path.join(DB_PATH, DB_FILE_NAME)
-    conn = sqlite3.connect(db_full_path)
-    print("connecting to db from path: ", db_full_path)
-    return conn
+from helper_funcs import connect_to_db
 
 ###############################################################################
 # Define the function to encode features
@@ -84,8 +77,9 @@ def encode_features():
         df_target = df_encoded['app_complete_flag']
         df_features.to_sql('features',con=conn,index=False,if_exists='replace')
         df_target.to_sql('target',con=conn,index=False,if_exists='replace')
-
-    conn.close()
+        conn.close()
+    else:
+        print("Unable to get DB connection")
 
 ###############################################################################
 # Define the function to train the model
@@ -139,4 +133,6 @@ def get_trained_model():
             mlflow.log_metric('test_auc',auc)
             runID = run.info.run_uuid
             print("Inside MLflow Run with id {}".format(runID))
-   
+        conn.close()
+    else:
+        print("Unable to get DB connection")

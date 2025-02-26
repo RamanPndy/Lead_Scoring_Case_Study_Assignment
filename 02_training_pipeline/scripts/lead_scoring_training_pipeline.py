@@ -3,7 +3,6 @@
 # #############################################################################
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.operators.bash import BashOperator
 import importlib.util
 from datetime import datetime, timedelta
 
@@ -33,21 +32,24 @@ def module_from_file(module_name, file_path):
     spec.loader.exec_module(module)
     return module
 
-utils = module_from_file("utils", "/Users/rpandey1/Desktop/Upgrad/Assignment/02_training_pipeline/scripts/utils.py")
-constants= module_from_file("utils", "/Users/rpandey1/Desktop/Upgrad/Assignment/02_training_pipeline/scripts/constants.py")
+utils = module_from_file("utils", "/Users/rpandey1/airflow/dags/Lead_scoring_training_pipeline/utils.py")
+constants= module_from_file("constants", "/Users/rpandey1/airflow/dags/Lead_scoring_training_pipeline/constants.py")
 
 ###############################################################################
 # Create a task for encode_features() function with task_id 'encoding_categorical_variables'
 # ##############################################################################
 encoding_categorical_variables = PythonOperator(task_id='encoding_categorical_variables',python_callable=utils.encode_features,
-                                               dag=ML_training_dag,op_kwargs={'db_file_name':constants.DB_FILE_NAME,'db_path':constants.DB_PATH,'one_hot_encoded_features':constants.ONE_HOT_ENCODED_FEATURES,'features_to_encode':constants.FEATURES_TO_ENCODE})
+                                               dag=ML_training_dag,op_kwargs={'db_file_name':constants.DB_FILE_NAME,'db_path':constants.DB_PATH,
+                                                                              'one_hot_encoded_features':constants.ONE_HOT_ENCODED_FEATURES,
+                                                                              'features_to_encode':constants.FEATURES_TO_ENCODE})
 
 ###############################################################################
 # Create a task for get_trained_model() function with task_id 'training_model'
 # ##############################################################################
 training_model = PythonOperator(task_id='training_model',python_callable=utils.get_trained_model,
-                                               dag=ML_training_dag,op_kwargs={'db_file_name':constants.DB_FILE_NAME,'db_path':constants.DB_PATH,'model_config':constants.model_config,'tracking_uri':constants.TRACKING_URI,
-                                                                             'experiment_name':constants.EXPERIMENT_NAME})
+                                               dag=ML_training_dag,op_kwargs={'db_file_name':constants.DB_FILE_NAME,'db_path':constants.DB_PATH,
+                                                                              'model_config':constants.model_config,'tracking_uri':constants.TRACKING_URI,
+                                                                             'experiment':constants.EXPERIMENT})
 
 ###############################################################################
 # Define relations between tasks

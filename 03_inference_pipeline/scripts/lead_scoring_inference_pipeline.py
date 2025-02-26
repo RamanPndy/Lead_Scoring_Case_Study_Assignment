@@ -33,20 +33,24 @@ def module_from_file(module_name, file_path):
     spec.loader.exec_module(module)
     return module
 
-utils = module_from_file("utils", "/Users/rpandey1/Desktop/Upgrad/Assignment/03_inference_pipeline/scripts/utils.py")
-constants= module_from_file("utils", "/Users/rpandey1/Desktop/Upgrad/Assignment/03_inference_pipeline/scripts/constants.py")
+utils = module_from_file("utils", "/Users/rpandey1/airflow/dags/Lead_scoring_inference_pipeline/utils.py")
+constants= module_from_file("constants", "/Users/rpandey1/airflow/dags/Lead_scoring_inference_pipeline/constants.py")
 
 ###############################################################################
 # Create a task for encode_data_task() function with task_id 'encoding_categorical_variables'
 # ##############################################################################
 encoding_categorical_variables = PythonOperator(task_id='encoding_categorical_variables',dag=Lead_scoring_inference_dag,python_callable=
-                                               utils.encode_features,op_kwargs={'db_file_name':constants.DB_FILE_NAME,'db_path':constants.DB_PATH,'one_hot_encoded_features':constants.ONE_HOT_ENCODED_FEATURES,'features_to_encode':constants.FEATURES_TO_ENCODE})
+                                               utils.encode_features,op_kwargs={'db_file_name':constants.DB_FILE_NAME,'db_path':constants.DB_PATH,
+                                                                                'one_hot_encoded_features':constants.ONE_HOT_ENCODED_FEATURES,
+                                                                                'features_to_encode':constants.FEATURES_TO_ENCODE})
 
 
 ###############################################################################
 # Create a task for load_model() function with task_id 'generating_models_prediction'
 # ##############################################################################
-generating_models_prediction=PythonOperator(task_id='generating_models_prediction',dag=Lead_scoring_inference_dag,python_callable=utils.get_models_prediction,op_kwargs={'db_file_name':constants.DB_FILE_NAME,'db_path':constants.DB_PATH,'tracking_uri':constants.TRACKING_URI,'model_path':constants.MODEL_PATH})
+generating_models_prediction=PythonOperator(task_id='generating_models_prediction',dag=Lead_scoring_inference_dag,python_callable=utils.get_models_prediction,
+                                            op_kwargs={'db_file_name':constants.DB_FILE_NAME,'db_path':constants.DB_PATH,'tracking_uri':constants.TRACKING_URI,
+                                                       'model_name':constants.MODEL_NAME, 'stage': constants.STAGE, 'experiment':constants.EXPERIMENT})
 
 
 ###############################################################################
@@ -60,7 +64,8 @@ checking_model_prediction_ratio = PythonOperator(task_id='checking_model_predict
 # Create a task for input_features_check() function with task_id 'checking_input_features'
 # ##############################################################################
 checking_input_features = PythonOperator(task_id='checking_input_features',dag=Lead_scoring_inference_dag,python_callable=utils.input_features_check,
-                                                op_kwargs={'db_file_name':constants.DB_FILE_NAME,'db_path':constants.DB_PATH,'one_hot_encoded_features':constants.ONE_HOT_ENCODED_FEATURES})
+                                                op_kwargs={'db_file_name':constants.DB_FILE_NAME,'db_path':constants.DB_PATH,
+                                                           'one_hot_encoded_features':constants.ONE_HOT_ENCODED_FEATURES})
 
 
 ###############################################################################

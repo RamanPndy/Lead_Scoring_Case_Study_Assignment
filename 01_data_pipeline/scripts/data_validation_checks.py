@@ -5,9 +5,9 @@ Import necessary modules
 
 import pandas as pd
 import os
-import sqlite3
 from constants import *
 from schema import *
+from helper_funcs import connect_to_db
 
 ###############################################################################
 # Define function to validate raw data's schema
@@ -88,29 +88,28 @@ def model_input_schema_check():
         print(f"Error: Database file '{DB_FILE_NAME}' not found in {DB_PATH}")
         return
 
-    try:
-        conn = sqlite3.connect(db_file_path)
+    conn = connect_to_db(db_file_path)
+    if conn:
         cursor = conn.cursor()
         
         # Fetch column names from 'model_input' table
         cursor.execute("PRAGMA table_info(model_input);")
-        table_columns = {row[1] for row in cursor.fetchall()}  # Extract column names
+        table_columns = {row[1] for row in cursor.fetchall()} 
+
+        schema_columns = set(model_input_schema)
+
+        if table_columns == schema_columns:
+            print("Model's input schema is in line with the schema present in schema.py")
+        else:
+            print("Model's input schema is NOT in line with the schema present in schema.py")
+            missing_columns = schema_columns - table_columns
+            extra_columns = table_columns - schema_columns
+
+            if missing_columns:
+                print(f"Missing columns in database: {missing_columns}")
+            if extra_columns:
+                print(f"Extra columns in database: {extra_columns}")
         
         conn.close()
-    except sqlite3.Error as e:
-        print(f"Error: Failed to connect to database. {e}")
-        return
-
-    schema_columns = set(model_input_schema)
-
-    if table_columns == schema_columns:
-        print("Model's input schema is in line with the schema present in schema.py")
     else:
-        print("Model's input schema is NOT in line with the schema present in schema.py")
-        missing_columns = schema_columns - table_columns
-        extra_columns = table_columns - schema_columns
-
-        if missing_columns:
-            print(f"Missing columns in database: {missing_columns}")
-        if extra_columns:
-            print(f"Extra columns in database: {extra_columns}")
+        print("Unable to get DB connection")

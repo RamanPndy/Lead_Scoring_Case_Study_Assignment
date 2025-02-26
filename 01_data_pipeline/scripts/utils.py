@@ -5,25 +5,15 @@
 
 import pandas as pd
 import os
-import sqlite3
-from sqlite3 import Error
 
 from constants import *
 from mapping.significant_categorical_level import *
 from mapping.city_tier_mapping import *
-
+from helper_funcs import create_database, connect_to_db, concatenate_df
 
 ###############################################################################
 # Define the function to build database
 ###############################################################################
-def create_database(db_full_path):
-    """Creates an SQLite database if it doesn't exist."""    
-    try:
-        conn = sqlite3.connect(db_full_path)
-        print(f"Database created successfully at {db_full_path}")
-    except Error as e:
-        print(f"Error creating database: {e}")
-
 def build_dbs():
     '''
     This function checks if the db file with specified name is present 
@@ -100,12 +90,14 @@ def load_data_into_db():
         df["referred_lead"].fillna(0, inplace=True)
         
         # Connect to the database and save the data
-        print("connecting to db from path: ", db_full_path)
-        conn = sqlite3.connect(db_full_path)
-        df.to_sql("loaded_data", conn, if_exists="replace", index=False)
-        conn.close()
-        
-        print("Data successfully loaded into the database.")
+        conn = connect_to_db(db_full_path)
+        if conn:
+            df.to_sql("loaded_data", conn, if_exists="replace", index=False)
+            conn.close()
+            
+            print("Data successfully loaded into the database.")
+        else:
+            print("Unable to get DB connection")
     except Exception as e:
         print("Error in loading data into DB ", e)
 
@@ -142,49 +134,43 @@ def map_city_tier():
     db_full_path = os.path.join(DB_PATH, DB_FILE_NAME)
     
     # Connect to the database and load data
-    print("connecting to db from path: ", db_full_path)
-    conn = sqlite3.connect(db_full_path)
-    df = pd.read_sql_query("SELECT * FROM loaded_data", conn)
-    
-    # Map city to its respective tier
-    df["city_tier"] = df["city_mapped"].map(city_tier_mapping).fillna(3.0)
-    df=df.drop('city_mapped',axis=1)
+    conn = connect_to_db(db_full_path)
+    if conn:
+        df = pd.read_sql_query("SELECT * FROM loaded_data", conn)
+        
+        # Map city to its respective tier
+        df["city_tier"] = df["city_mapped"].map(city_tier_mapping).fillna(3.0)
+        df=df.drop('city_mapped',axis=1)
 
-    # calculate the frequency of individual category in first_platform_c column
-    df_cat_freq = df['first_platform_c'].value_counts() 
+        # calculate the frequency of individual category in first_platform_c column
+        df_cat_freq = df['first_platform_c'].value_counts() 
 
-    # index the dataframe that we created above 
-    df_cat_freq = pd.DataFrame({'column':df_cat_freq.index, 'value':df_cat_freq.values})
-    
-    # calculate the cumulative percentage for each category. This is given by calculating cumulative sum and dividing by total sum for each category.
-    df_cat_freq['perc'] = df_cat_freq['value'].cumsum()/df_cat_freq['value'].sum()
-
-    # cumulative percetage is calculated for all the three columns - first_platform_c, first_utm_medium_c, first_utm_source_c
-    for column in ['first_platform_c', 'first_utm_medium_c', 'first_utm_source_c']:
-        df_cat_freq = df[column].value_counts()
+        # index the dataframe that we created above 
         df_cat_freq = pd.DataFrame({'column':df_cat_freq.index, 'value':df_cat_freq.values})
+        
+        # calculate the cumulative percentage for each category. This is given by calculating cumulative sum and dividing by total sum for each category.
         df_cat_freq['perc'] = df_cat_freq['value'].cumsum()/df_cat_freq['value'].sum()
-        print(column,)
-        print(list(df_cat_freq.loc[df_cat_freq['perc']<=0.9].column))
-        print('\n')
-    
-    # Save the processed dataframe
-    df.to_sql("city_tier_mapped", conn, if_exists="replace", index=False)
-    conn.close()
-    
-    print("City tier mapping completed and saved to database.")
+
+        # cumulative percetage is calculated for all the three columns - first_platform_c, first_utm_medium_c, first_utm_source_c
+        for column in ['first_platform_c', 'first_utm_medium_c', 'first_utm_source_c']:
+            df_cat_freq = df[column].value_counts()
+            df_cat_freq = pd.DataFrame({'column':df_cat_freq.index, 'value':df_cat_freq.values})
+            df_cat_freq['perc'] = df_cat_freq['value'].cumsum()/df_cat_freq['value'].sum()
+            print(column,)
+            print(list(df_cat_freq.loc[df_cat_freq['perc']<=0.9].column))
+            print('\n')
+        
+        # Save the processed dataframe
+        df.to_sql("city_tier_mapped", conn, if_exists="replace", index=False)
+        conn.close()
+        
+        print("City tier mapping completed and saved to database.")
+    else:
+        print("Unable to get DB connection")
 
 ###############################################################################
 # Define function to map insignificant categorial variables to "others"
 ###############################################################################
-
-def concatenate_df(df, column, significant_categorical_list):
-    new_df = df[~df[column].isin(significant_categorical_list)] # get rows for levels which are not present in significant_categorical_list
-    new_df[column] = "others" # replace the value of these levels to others
-    old_df = df[df[column].isin(significant_categorical_list)] # get rows for levels which are present in significant_categorical_list
-    df = pd.concat([new_df, old_df])
-    return df
-
 def map_categorical_vars():
     '''
     This function maps all the insignificant variables present in 'first_platform_c'
@@ -217,22 +203,23 @@ def map_categorical_vars():
         map_categorical_vars()
     '''
     db_full_path = f"{DB_PATH}/{DB_FILE_NAME}"
-    print("connecting to db from path: ", db_full_path)
-    conn = sqlite3.connect(db_full_path)
-    df = pd.read_sql("SELECT * FROM city_tier_mapped", conn)
+    conn = connect_to_db(db_full_path)
+    if conn:
+        df = pd.read_sql("SELECT * FROM city_tier_mapped", conn)
 
-    df = concatenate_df(df, "first_platform_c", list_platform)
-    df = concatenate_df(df, "first_utm_medium_c", list_medium)
-    df = concatenate_df(df, "first_utm_source_c", list_source)
-    
-    df['total_leads_droppped'] = df['total_leads_droppped'].fillna(0)
-    df['referred_lead'] = df['referred_lead'].fillna(0)
+        df = concatenate_df(df, "first_platform_c", list_platform)
+        df = concatenate_df(df, "first_utm_medium_c", list_medium)
+        df = concatenate_df(df, "first_utm_source_c", list_source)
+        
+        df['total_leads_droppped'] = df['total_leads_droppped'].fillna(0)
+        df['referred_lead'] = df['referred_lead'].fillna(0)
 
-    df = df.drop_duplicates()
+        df = df.drop_duplicates()
 
-    df.to_sql("categorical_variables_mapped", conn, if_exists="replace", index=False)
-    conn.close()
-
+        df.to_sql("categorical_variables_mapped", conn, if_exists="replace", index=False)
+        conn.close()
+    else:
+        print("Unable to get DB connection")
 
 ##############################################################################
 # Define function that maps interaction columns into 4 types of interactions
@@ -275,31 +262,33 @@ def interactions_mapping():
         interactions_mapping()
     '''
     db_full_path = f"{DB_PATH}/{DB_FILE_NAME}"
-    print("connecting to db from path: ", db_full_path)
-    conn = sqlite3.connect(db_full_path)
-    df = pd.read_sql("SELECT * FROM categorical_variables_mapped", conn)
-    df = df.drop_duplicates()
-    
-    interaction_mapping = pd.read_csv(INTERACTION_MAPPING)
-    df = df.melt(id_vars=INDEX_COLUMNS_TRAINING, var_name="interaction_type", value_name="interaction_value")
-    # handle the nulls in the interaction value column
-    df['interaction_value'] = df['interaction_value'].fillna(0)
+    conn = connect_to_db(db_full_path)
+    if conn:
+        df = pd.read_sql("SELECT * FROM categorical_variables_mapped", conn)
+        df = df.drop_duplicates()
+        
+        interaction_mapping = pd.read_csv(INTERACTION_MAPPING)
+        df = df.melt(id_vars=INDEX_COLUMNS_TRAINING, var_name="interaction_type", value_name="interaction_value")
+        # handle the nulls in the interaction value column
+        df['interaction_value'] = df['interaction_value'].fillna(0)
 
-    # map interaction type column with the mapping file to get interaction mapping
-    df = df.merge(interaction_mapping, on="interaction_type", how="left")
+        # map interaction type column with the mapping file to get interaction mapping
+        df = df.merge(interaction_mapping, on="interaction_type", how="left")
 
-    #dropping the interaction type column as it is not needed
-    df = df.drop(['interaction_type'], axis=1)
+        #dropping the interaction type column as it is not needed
+        df = df.drop(['interaction_type'], axis=1)
 
-    df = df.pivot_table(index=INDEX_COLUMNS_TRAINING, values="interaction_value", columns='interaction_mapping', aggfunc='sum').reset_index()
-    
-    df.to_sql("interactions_mapped", conn, if_exists="replace", index=False)
-    
-    if 'app_complete_flag' in df.columns:
-        feature_columns = [col for col in df.columns if col not in NOT_FEATURES]
+        df = df.pivot_table(index=INDEX_COLUMNS_TRAINING, values="interaction_value", columns='interaction_mapping', aggfunc='sum').reset_index()
+        
+        df.to_sql("interactions_mapped", conn, if_exists="replace", index=False)
+        
+        if 'app_complete_flag' in df.columns:
+            feature_columns = [col for col in df.columns if col not in NOT_FEATURES]
+        else:
+            feature_columns = [col for col in df.columns if col not in NOT_FEATURES and col != 'app_complete_flag']
+        
+        df[feature_columns].to_sql("model_input", conn, if_exists="replace", index=False)
+        conn.close()
     else:
-        feature_columns = [col for col in df.columns if col not in NOT_FEATURES and col != 'app_complete_flag']
-    
-    df[feature_columns].to_sql("model_input", conn, if_exists="replace", index=False)
-    conn.close()
+        print("Unable to get DB connection")
    
